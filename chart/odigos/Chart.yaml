@@ -1,0 +1,8 @@
+apiVersion: v2
+appVersion: v1.8.4
+description: Instant Distributed Tracing
+icon: https://d2q89wckrml3k4.cloudfront.net/logo.png
+kubeVersion: '>= 1.20.15-0'
+name: odigos
+type: application
+version: 1.8.4
