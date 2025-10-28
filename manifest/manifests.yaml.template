@@ -21,6 +21,7 @@ spec:
         - name: installer
           image: $imageFull
           imagePullPolicy: Always
+          command: ["/installer"]
           env:
             - name: ODIGOS_NAMESPACE
               value: "$namespace"

@@ -24,35 +24,43 @@ func main() {
 	ctx := context.Background()
 	logger := log.FromContext(ctx)
 
+	logger.Info("Starting Odigos installer")
+
+	logger.Info("Getting k8s config")
 	k8sConfig, err := config.GetConfig()
 	if err != nil {
 		logger.Error(err, "unable to get k8s config", "controller", "Odigos")
 		os.Exit(1)
 	}
 
+	logger.Info("Creating k8s clientset")
 	clientset, err := kubernetes.NewForConfig(k8sConfig)
 	if err != nil {
 		panic(fmt.Errorf("failed to create clientset: %v", err))
 	}
 
+	logger.Info("Creating k8s dynamic client")
 	dynamicClient, err := dynamic.NewForConfig(k8sConfig)
 	if err != nil {
 		logger.Error(err, "unable to get k8s dynamic client", "controller", "Odigos")
 		os.Exit(1)
 	}
 
+	logger.Info("Creating k8s extend clientset")
 	extendClientset, err := apiextensionsclient.NewForConfig(k8sConfig)
 	if err != nil {
 		logger.Error(err, "unable to get k8s extendClientset", "controller", "Odigos")
 		os.Exit(1)
 	}
 
+	logger.Info("Creating Odigos client")
 	odigosClient, err := v1alpha1.NewForConfig(k8sConfig)
 	if err != nil {
 		logger.Error(err, "unable to get Odigos client", "controller", "Odigos")
 		os.Exit(1)
 	}
 
+	logger.Info("Creating kube client")
 	kubeClient := &kube.Client{
 		Interface:     clientset,
 		Clientset:     clientset,
@@ -88,6 +96,7 @@ func main() {
 	odigosInstallerName := os.Getenv("ODIGOS_INSTALLER_NAME")
 	odigosInstallerNamespace := os.Getenv("ODIGOS_INSTALLER_NAMESPACE")
 
+	logger.Info("Getting installer deployment")
 	if odigosInstallerName != "" && odigosInstallerNamespace != "" {
 		deployment, err := clientset.AppsV1().Deployments(odigosInstallerNamespace).Get(ctx, odigosInstallerName, metav1.GetOptions{})
 		if err != nil {
@@ -108,6 +117,7 @@ func main() {
 		managerOpts.OwnerReferences = []metav1.OwnerReference{ownerRef}
 	}
 
+	logger.Info("Creating resource managers")
 	resourceManagers := resources.CreateResourceManagers(
 		kubeClient,
 		ns,
@@ -117,6 +127,8 @@ func main() {
 		version,
 		installationmethod.K8sInstallationMethodOdigosOperator,
 		managerOpts)
+
+	logger.Info("Applying resource managers")
 	err = resources.ApplyResourceManagers(ctx, kubeClient, resourceManagers, "Creating")
 	if err != nil {
 		logger.Error(err, "unable to apply resource managers", "controller", "Odigos")
