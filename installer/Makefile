@@ -1,7 +1,7 @@
 # Variables
 ORG ?= gcr.io/odigos-public
 IMAGE_NAME = odigos
-TAG ?= latest
+TAG ?= 1.8.6
 PLATFORMS = linux/amd64,linux/arm64
 
 # Full image reference
