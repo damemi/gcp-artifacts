@@ -7,7 +7,47 @@ x-google-marketplace:
   publishedVersion: '1.8.6'
   publishedVersionMetadata:
     releaseNote: >-
-      A first release.
+      Odigos is a platform for tracing and observability.
+
+  deployerServiceAccount:
+    description: >
+        Creates app resources, including the Odigos CRDs and RBAC resources.
+    roles:
+      - type: ClusterRole
+        rulesType: CUSTOM
+        rules:
+        # CRD management
+        - apiGroups: ['apiextensions.k8s.io']
+          resources: ['customresourcedefinitions']
+          verbs: ['*']
+        # Odigos CRDs
+        - apiGroups: ['odigos.io']
+          resources: ['*']
+          verbs: ['*']
+        - apiGroups: ['actions.odigos.io']
+          resources: ['*']
+          verbs: ['*']
+        # Core resources
+        - apiGroups: ['']
+          resources: ['configmaps', 'secrets', 'services', 'serviceaccounts', 'pods', 'namespaces', 'resourcequotas']
+          verbs: ['get', 'list', 'watch', 'create', 'update', 'patch', 'delete']
+        # Apps resources
+        - apiGroups: ['apps']
+          resources: ['deployments', 'daemonsets', 'statefulsets']
+          verbs: ['get', 'list', 'watch', 'create', 'update', 'patch', 'delete']
+        # RBAC resources
+        - apiGroups: ['rbac.authorization.k8s.io']
+          resources: ['roles', 'rolebindings', 'clusterroles', 'clusterrolebindings']
+          verbs: ['get', 'list', 'watch', 'create', 'update', 'patch', 'delete']
+        # Policy resources
+        - apiGroups: ['policy']
+          resources: ['poddisruptionbudgets']
+          verbs: ['get', 'list', 'watch', 'create', 'update', 'patch', 'delete']
+        # Webhook configurations
+        - apiGroups: ['admissionregistration.k8s.io']
+          resources: ['mutatingwebhookconfigurations', 'validatingwebhookconfigurations']
+          verbs: ['get', 'list', 'watch', 'create', 'update', 'patch', 'delete']
+  
   images:
     '':
       properties:
