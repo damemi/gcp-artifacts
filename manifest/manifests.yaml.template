@@ -16,7 +16,7 @@ spec:
       labels:
         app: $name
     spec:
-      serviceAccountName: $name
+      serviceAccountName: $name-deployer-sa
       containers:
         - name: installer
           image: $imageFull
