@@ -280,4 +280,18 @@ func watchOdigletDaemonSet(ctx context.Context, clientset *kubernetes.Clientset,
 	}
 
 	fmt.Println("Odiglet DaemonSet watcher started successfully")
+
+	// Start periodic usage reporting every 60 seconds
+	ticker := time.NewTicker(60 * time.Second)
+	go func() {
+		for range ticker.C {
+			ds, err := clientset.AppsV1().DaemonSets(namespace).Get(ctx, "odigos-odiglet", metav1.GetOptions{})
+			if err != nil {
+				fmt.Fprintf(os.Stderr, "ERROR: Failed to get odiglet DaemonSet for periodic reporting: %v\n", err)
+				continue
+			}
+			fmt.Println("Periodic usage report (60s interval)")
+			reportUsage(ds)
+		}
+	}()
 }
