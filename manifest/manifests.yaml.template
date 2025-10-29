@@ -7,9 +7,10 @@ metadata:
 data:
   config.yaml: |
     identities:
-      gcp:
-        encodedServiceAccountKey: $AGENT_ENCODED_KEY
-        consumerId: $AGENT_CONSUMER_ID
+      - name: gcp
+        gcp:
+          encodedServiceAccountKey: $AGENT_ENCODED_KEY
+          consumerId: $AGENT_CONSUMER_ID
 
     endpoints:
       - name: on_disk
