@@ -4,11 +4,17 @@ import (
 	"context"
 	"fmt"
 	"os"
+	"os/signal"
+	"syscall"
+	"time"
 
+	appsv1 "k8s.io/api/apps/v1"
 	apiextensionsclient "k8s.io/apiextensions-apiserver/pkg/client/clientset/clientset"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/dynamic"
+	"k8s.io/client-go/informers"
 	"k8s.io/client-go/kubernetes"
+	"k8s.io/client-go/tools/cache"
 	"sigs.k8s.io/controller-runtime/pkg/client/config"
 
 	"github.com/odigos-io/odigos/api/generated/odigos/clientset/versioned/typed/odigos/v1alpha1"
@@ -135,4 +141,71 @@ func main() {
 	}
 
 	fmt.Println("Odigos installation completed successfully")
+
+	// Start watching odiglet daemonset for usage reporting
+	if odigosInstallerNamespace != "" {
+		fmt.Println("Starting odiglet daemonset watcher")
+		watchOdigletDaemonSet(ctx, clientset, odigosInstallerNamespace)
+	}
+
+	// Keep the process running
+	fmt.Println("Installer running, waiting for shutdown signal...")
+	sigCh := make(chan os.Signal, 1)
+	signal.Notify(sigCh, syscall.SIGINT, syscall.SIGTERM)
+	<-sigCh
+	fmt.Println("Shutdown signal received, exiting...")
+}
+
+func reportUsage(ds *appsv1.DaemonSet) {
+	replicas := ds.Status.DesiredNumberScheduled
+	fmt.Println("Odiglet DaemonSet replicas: ", replicas)
+}
+
+func watchOdigletDaemonSet(ctx context.Context, clientset *kubernetes.Clientset, namespace string) {
+	// Create informer factory with namespace scope
+	factory := informers.NewSharedInformerFactoryWithOptions(
+		clientset,
+		time.Minute*5,
+		informers.WithNamespace(namespace),
+	)
+
+	// Get the DaemonSet informer
+	daemonSetInformer := factory.Apps().V1().DaemonSets().Informer()
+
+	// Add event handlers
+	daemonSetInformer.AddEventHandler(cache.ResourceEventHandlerFuncs{
+		AddFunc: func(obj interface{}) {
+			ds := obj.(*appsv1.DaemonSet)
+			if ds.Name == "odigos-odiglet" {
+				fmt.Printf("Odiglet DaemonSet added: %s/%s\n", ds.Namespace, ds.Name)
+				reportUsage(ds)
+			}
+		},
+		UpdateFunc: func(oldObj, newObj interface{}) {
+			ds := newObj.(*appsv1.DaemonSet)
+			if ds.Name == "odigos-odiglet" {
+				fmt.Printf("Odiglet DaemonSet updated: %s/%s\n", ds.Namespace, ds.Name)
+				reportUsage(ds)
+			}
+		},
+		DeleteFunc: func(obj interface{}) {
+			ds := obj.(*appsv1.DaemonSet)
+			if ds.Name == "odigos-odiglet" {
+				fmt.Printf("Odiglet DaemonSet deleted: %s/%s\n", ds.Namespace, ds.Name)
+				reportUsage(ds)
+			}
+		},
+	})
+
+	// Start the informer
+	stopCh := make(chan struct{})
+	go factory.Start(stopCh)
+
+	// Wait for cache sync
+	if !cache.WaitForCacheSync(stopCh, daemonSetInformer.HasSynced) {
+		fmt.Fprintf(os.Stderr, "ERROR: Failed to sync cache for DaemonSet informer\n")
+		return
+	}
+
+	fmt.Println("Odiglet DaemonSet watcher started successfully")
 }
