@@ -9,7 +9,58 @@ x-google-marketplace:
     releaseNote: >-
       Odigos is a platform for tracing and observability.
 
-  deployerServiceAccount:
+  images:
+    '':
+      properties:
+        imageFull:
+          type: FULL
+    odigos-init-container:
+      properties:
+        initContainerImageFull:
+          type: FULL
+    odigos-scheduler:
+      properties:
+        schedulerImageFull:
+          type: FULL
+    odigos-instrumentor:
+      properties:
+        instrumentorImageFull:
+          type: FULL
+    odigos-odiglet:
+      properties:
+        odigletImageFull:
+          type: FULL
+    odigos-ui:
+      properties:
+        uiImageFull:
+          type: FULL
+    odigos-autoscaler:
+      properties:
+        autoscalerImageFull:
+          type: FULL
+    odigos-collector:
+      properties:
+        collectorImageFull:
+          type: FULL
+
+properties:
+  name:
+    type: string
+    x-google-marketplace:
+      type: NAME
+  namespace:
+    type: string
+    x-google-marketplace:
+      type: NAMESPACE
+  reportingSecret:
+    type: string
+    x-google-marketplace:
+      type: REPORTING_SECRET
+
+  installerServiceAccount:
+    type: string
+    x-google-marketplace:
+      type: SERVICE_ACCOUNT
     description: >
         Creates app resources, including the Odigos CRDs and RBAC resources.
     roles:
@@ -59,53 +110,6 @@ x-google-marketplace:
           resources: ['mutatingwebhookconfigurations', 'validatingwebhookconfigurations']
           verbs: ['get', 'list', 'watch', 'create', 'update', 'patch', 'delete']
   
-  images:
-    '':
-      properties:
-        imageFull:
-          type: FULL
-    odigos-init-container:
-      properties:
-        initContainerImageFull:
-          type: FULL
-    odigos-scheduler:
-      properties:
-        schedulerImageFull:
-          type: FULL
-    odigos-instrumentor:
-      properties:
-        instrumentorImageFull:
-          type: FULL
-    odigos-odiglet:
-      properties:
-        odigletImageFull:
-          type: FULL
-    odigos-ui:
-      properties:
-        uiImageFull:
-          type: FULL
-    odigos-autoscaler:
-      properties:
-        autoscalerImageFull:
-          type: FULL
-    odigos-collector:
-      properties:
-        collectorImageFull:
-          type: FULL
-
-properties:
-  name:
-    type: string
-    x-google-marketplace:
-      type: NAME
-  namespace:
-    type: string
-    x-google-marketplace:
-      type: NAMESPACE
-  reportingSecret:
-    type: string
-    x-google-marketplace:
-      type: REPORTING_SECRET
 
 required:
 - name

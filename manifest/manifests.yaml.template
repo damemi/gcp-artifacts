@@ -54,7 +54,7 @@ spec:
       labels:
         app: $name
     spec:
-      serviceAccountName: $name
+      serviceAccountName: $installerServiceAccount
       containers:
         - name: installer
           image: $imageFull
