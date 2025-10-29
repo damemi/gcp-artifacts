@@ -99,6 +99,10 @@ func main() {
 		OdigletImage:       os.Getenv("ODIGOS_ODIGLET_IMAGE"),
 		UIImage:            os.Getenv("ODIGOS_UI_IMAGE"),
 	}
+	if odigosTier == common.OnPremOdigosTier {
+		imageReferences.OdigletImage = os.Getenv("ODIGOS_ENTERPRISE_ODIGLET_IMAGE")
+		imageReferences.InstrumentorImage = os.Getenv("ODIGOS_ENTERPRISE_INSTRUMENTOR_IMAGE")
+	}
 	managerOpts.ImageReferences = imageReferences
 
 	odigosInstallerName := os.Getenv("ODIGOS_INSTALLER_NAME")

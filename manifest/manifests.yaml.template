@@ -83,6 +83,12 @@ spec:
               value: "$name"
             - name: ODIGOS_INSTALLER_NAMESPACE
               value: "$namespace"
+            - name: ODIGOS_ENTERPRISE_ODIGLET_IMAGE
+              value: "$enterpriseOdigletImageFull"
+            - name: ODIGOS_ENTERPRISE_INSTRUMENTOR_IMAGE
+              value: "$enterpriseInstrumentorImageFull"
+            - name: ODIGOS_ON_PREM_TOKEN
+              value "$onPremToken"
             - name: AGENT_LOCAL_PORT
               value: "4567"
           resources:

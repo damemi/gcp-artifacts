@@ -42,6 +42,14 @@ x-google-marketplace:
       properties:
         collectorImageFull:
           type: FULL
+    odigos-enterprise-odiglet:
+      properties:
+        enterpriseOdigletImageFull:
+          type: FULL
+    odigos-enterprise-instrumentor:
+      properties:
+        enterpriseInstrumentorImageFull:
+          type: FULL
 
 properties:
   name:
@@ -52,6 +60,8 @@ properties:
     type: string
     x-google-marketplace:
       type: NAMESPACE
+  onPremToken:
+    type: string
   reportingSecret:
     type: string
     x-google-marketplace:
