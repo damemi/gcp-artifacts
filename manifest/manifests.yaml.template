@@ -26,13 +26,11 @@ data:
     metrics:
       - name: installed_nodes
         type: int
-        aggregation:
-          bufferSeconds: 60
+        passthrough: {}
         endpoints:
           - name: on_disk
           - name: servicecontrol
-        passthrough: {}
-    
+
     sources:
       - name: installed_nodes_source
         heartbeat:
