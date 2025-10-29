@@ -10,7 +10,6 @@ import (
 	"k8s.io/client-go/dynamic"
 	"k8s.io/client-go/kubernetes"
 	"sigs.k8s.io/controller-runtime/pkg/client/config"
-	"sigs.k8s.io/controller-runtime/pkg/log"
 
 	"github.com/odigos-io/odigos/api/generated/odigos/clientset/versioned/typed/odigos/v1alpha1"
 	"github.com/odigos-io/odigos/cli/cmd/resources"
@@ -22,45 +21,45 @@ import (
 
 func main() {
 	ctx := context.Background()
-	logger := log.FromContext(ctx)
 
-	logger.Info("Starting Odigos installer")
+	fmt.Println("Starting Odigos installer")
 
-	logger.Info("Getting k8s config")
+	fmt.Println("Getting k8s config")
 	k8sConfig, err := config.GetConfig()
 	if err != nil {
-		logger.Error(err, "unable to get k8s config", "controller", "Odigos")
+		fmt.Fprintf(os.Stderr, "ERROR: unable to get k8s config: %v\n", err)
 		os.Exit(1)
 	}
 
-	logger.Info("Creating k8s clientset")
+	fmt.Println("Creating k8s clientset")
 	clientset, err := kubernetes.NewForConfig(k8sConfig)
 	if err != nil {
-		panic(fmt.Errorf("failed to create clientset: %v", err))
+		fmt.Fprintf(os.Stderr, "ERROR: failed to create clientset: %v\n", err)
+		os.Exit(1)
 	}
 
-	logger.Info("Creating k8s dynamic client")
+	fmt.Println("Creating k8s dynamic client")
 	dynamicClient, err := dynamic.NewForConfig(k8sConfig)
 	if err != nil {
-		logger.Error(err, "unable to get k8s dynamic client", "controller", "Odigos")
+		fmt.Fprintf(os.Stderr, "ERROR: unable to get k8s dynamic client: %v\n", err)
 		os.Exit(1)
 	}
 
-	logger.Info("Creating k8s extend clientset")
+	fmt.Println("Creating k8s extend clientset")
 	extendClientset, err := apiextensionsclient.NewForConfig(k8sConfig)
 	if err != nil {
-		logger.Error(err, "unable to get k8s extendClientset", "controller", "Odigos")
+		fmt.Fprintf(os.Stderr, "ERROR: unable to get k8s extendClientset: %v\n", err)
 		os.Exit(1)
 	}
 
-	logger.Info("Creating Odigos client")
+	fmt.Println("Creating Odigos client")
 	odigosClient, err := v1alpha1.NewForConfig(k8sConfig)
 	if err != nil {
-		logger.Error(err, "unable to get Odigos client", "controller", "Odigos")
+		fmt.Fprintf(os.Stderr, "ERROR: unable to get Odigos client: %v\n", err)
 		os.Exit(1)
 	}
 
-	logger.Info("Creating kube client")
+	fmt.Println("Creating kube client")
 	kubeClient := &kube.Client{
 		Interface:     clientset,
 		Clientset:     clientset,
@@ -96,11 +95,11 @@ func main() {
 	odigosInstallerName := os.Getenv("ODIGOS_INSTALLER_NAME")
 	odigosInstallerNamespace := os.Getenv("ODIGOS_INSTALLER_NAMESPACE")
 
-	logger.Info("Getting installer deployment")
+	fmt.Println("Getting installer deployment")
 	if odigosInstallerName != "" && odigosInstallerNamespace != "" {
 		deployment, err := clientset.AppsV1().Deployments(odigosInstallerNamespace).Get(ctx, odigosInstallerName, metav1.GetOptions{})
 		if err != nil {
-			logger.Error(err, "unable to get installer deployment", "name", odigosInstallerName, "namespace", odigosInstallerNamespace)
+			fmt.Fprintf(os.Stderr, "ERROR: unable to get installer deployment %s in namespace %s: %v\n", odigosInstallerName, odigosInstallerNamespace, err)
 			os.Exit(1)
 		}
 
@@ -117,7 +116,7 @@ func main() {
 		managerOpts.OwnerReferences = []metav1.OwnerReference{ownerRef}
 	}
 
-	logger.Info("Creating resource managers")
+	fmt.Println("Creating resource managers")
 	resourceManagers := resources.CreateResourceManagers(
 		kubeClient,
 		ns,
@@ -128,10 +127,12 @@ func main() {
 		installationmethod.K8sInstallationMethodOdigosOperator,
 		managerOpts)
 
-	logger.Info("Applying resource managers")
+	fmt.Println("Applying resource managers")
 	err = resources.ApplyResourceManagers(ctx, kubeClient, resourceManagers, "Creating")
 	if err != nil {
-		logger.Error(err, "unable to apply resource managers", "controller", "Odigos")
+		fmt.Fprintf(os.Stderr, "ERROR: unable to apply resource managers: %v\n", err)
 		os.Exit(1)
 	}
+
+	fmt.Println("Odigos installation completed successfully")
 }

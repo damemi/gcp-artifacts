@@ -42,13 +42,9 @@ spec:
             - name: ODIGOS_UI_IMAGE
               value: "$uiImageFull"
             - name: ODIGOS_INSTALLER_NAME
-              valueFrom:
-                fieldRef:
-                  fieldPath: metadata.name
+              value: "$name"
             - name: ODIGOS_INSTALLER_NAMESPACE
-              valueFrom:
-                fieldRef:
-                  fieldPath: metadata.namespace
+              value: "$namespace"
           resources:
             requests:
               cpu: 100m
