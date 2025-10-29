@@ -32,11 +32,15 @@ x-google-marketplace:
           verbs: ['*']
         # Core resources
         - apiGroups: ['']
-          resources: ['configmaps', 'secrets', 'services', 'serviceaccounts', 'pods', 'namespaces', 'resourcequotas', 'nodes']
+          resources: ['configmaps', 'secrets', 'services', 'serviceaccounts', 'pods', 'namespaces', 'resourcequotas', 'nodes', 'endpoints']
           verbs: ['get', 'list', 'watch', 'create', 'update', 'patch', 'delete']
+        # Core subresources
+        - apiGroups: ['']
+          resources: ['nodes/proxy', 'nodes/stats', 'pods/status']
+          verbs: ['get', 'list']
         # Apps resources
         - apiGroups: ['apps']
-          resources: ['deployments', 'daemonsets', 'statefulsets']
+          resources: ['deployments', 'daemonsets', 'statefulsets', 'replicasets']
           verbs: ['get', 'list', 'watch', 'create', 'update', 'patch', 'delete']
         # Batch resources
         - apiGroups: ['batch']
