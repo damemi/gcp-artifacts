@@ -106,9 +106,9 @@ func main() {
 
 	fmt.Println("Getting installer deployment")
 	if odigosInstallerName != "" && odigosInstallerNamespace != "" {
-		deployment, err := clientset.AppsV1().Deployments(odigosInstallerNamespace).Get(ctx, odigosInstallerName, metav1.GetOptions{})
+		deployment, err := getDeploymentWithRetry(ctx, clientset, odigosInstallerName, odigosInstallerNamespace)
 		if err != nil {
-			fmt.Fprintf(os.Stderr, "ERROR: unable to get installer deployment %s in namespace %s: %v\n", odigosInstallerName, odigosInstallerNamespace, err)
+			fmt.Fprintf(os.Stderr, "ERROR: unable to get installer deployment %s in namespace %s after retries: %v\n", odigosInstallerName, odigosInstallerNamespace, err)
 			os.Exit(1)
 		}
 
@@ -157,6 +157,33 @@ func main() {
 	signal.Notify(sigCh, syscall.SIGINT, syscall.SIGTERM)
 	<-sigCh
 	fmt.Println("Shutdown signal received, exiting...")
+}
+
+func getDeploymentWithRetry(ctx context.Context, clientset *kubernetes.Clientset, name, namespace string) (*appsv1.Deployment, error) {
+	maxRetries := 10
+	initialDelay := time.Second * 2
+	maxDelay := time.Second * 30
+
+	for attempt := 0; attempt < maxRetries; attempt++ {
+		deployment, err := clientset.AppsV1().Deployments(namespace).Get(ctx, name, metav1.GetOptions{})
+		if err == nil {
+			fmt.Printf("Successfully retrieved deployment %s/%s\n", namespace, name)
+			return deployment, nil
+		}
+
+		// Calculate exponential backoff with jitter
+		delay := initialDelay * time.Duration(1<<uint(attempt))
+		if delay > maxDelay {
+			delay = maxDelay
+		}
+
+		fmt.Printf("Attempt %d/%d: Failed to get deployment %s/%s: %v. Retrying in %v...\n",
+			attempt+1, maxRetries, namespace, name, err, delay)
+
+		time.Sleep(delay)
+	}
+
+	return nil, fmt.Errorf("failed to get deployment after %d attempts", maxRetries)
 }
 
 func reportUsage(ds *appsv1.DaemonSet) {
