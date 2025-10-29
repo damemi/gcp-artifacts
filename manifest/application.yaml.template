@@ -10,7 +10,7 @@ metadata:
 spec:
   descriptor:
     type: odigos
-    version: '1.8.6'
+    version: 'v1.8.6'
   selector:
     matchLabels:
       app.kubernetes.io/name: "$name"
