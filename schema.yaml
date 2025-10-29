@@ -27,13 +27,20 @@ x-google-marketplace:
         - apiGroups: ['actions.odigos.io']
           resources: ['*']
           verbs: ['*']
+        - apiGroups: ['operator.odigos.io']
+          resources: ['*']
+          verbs: ['*']
         # Core resources
         - apiGroups: ['']
-          resources: ['configmaps', 'secrets', 'services', 'serviceaccounts', 'pods', 'namespaces', 'resourcequotas']
+          resources: ['configmaps', 'secrets', 'services', 'serviceaccounts', 'pods', 'namespaces', 'resourcequotas', 'nodes']
           verbs: ['get', 'list', 'watch', 'create', 'update', 'patch', 'delete']
         # Apps resources
         - apiGroups: ['apps']
           resources: ['deployments', 'daemonsets', 'statefulsets']
+          verbs: ['get', 'list', 'watch', 'create', 'update', 'patch', 'delete']
+        # Batch resources
+        - apiGroups: ['batch']
+          resources: ['jobs', 'cronjobs']
           verbs: ['get', 'list', 'watch', 'create', 'update', 'patch', 'delete']
         # RBAC resources
         - apiGroups: ['rbac.authorization.k8s.io']
