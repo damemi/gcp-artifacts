@@ -84,7 +84,7 @@ properties:
               verbs: ['*']
             # Core resources
             - apiGroups: ['']
-              resources: ['configmaps', 'secrets', 'services', 'serviceaccounts', 'pods', 'namespaces', 'resourcequotas', 'nodes', 'endpoints']
+              resources: ['configmaps', 'secrets', 'services', 'serviceaccounts', 'pods', 'namespaces', 'resourcequotas', 'nodes', 'endpoints', 'events']
               verbs: ['get', 'list', 'watch', 'create', 'update', 'patch', 'delete']
             # Core subresources
             - apiGroups: ['']
@@ -97,6 +97,10 @@ properties:
             # Batch resources
             - apiGroups: ['batch']
               resources: ['jobs', 'cronjobs']
+              verbs: ['get', 'list', 'watch', 'create', 'update', 'patch', 'delete']
+            # Coordination resources (for leader election)
+            - apiGroups: ['coordination.k8s.io']
+              resources: ['leases']
               verbs: ['get', 'list', 'watch', 'create', 'update', 'patch', 'delete']
             # RBAC resources
             - apiGroups: ['rbac.authorization.k8s.io']
