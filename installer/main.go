@@ -17,8 +17,8 @@ import (
 	"k8s.io/client-go/dynamic"
 	"k8s.io/client-go/informers"
 	"k8s.io/client-go/kubernetes"
+	"k8s.io/client-go/rest"
 	"k8s.io/client-go/tools/cache"
-	"sigs.k8s.io/controller-runtime/pkg/client/config"
 
 	"github.com/odigos-io/odigos/api/generated/odigos/clientset/versioned/typed/odigos/v1alpha1"
 	"github.com/odigos-io/odigos/cli/cmd/resources"
@@ -34,7 +34,7 @@ func main() {
 	fmt.Println("Starting Odigos installer")
 
 	fmt.Println("Getting k8s config")
-	k8sConfig, err := config.GetConfig()
+	k8sConfig, err := rest.InClusterConfig()
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "ERROR: unable to get k8s config: %v\n", err)
 		os.Exit(1)
