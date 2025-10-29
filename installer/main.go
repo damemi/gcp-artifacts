@@ -1,8 +1,11 @@
 package main
 
 import (
+	"bytes"
 	"context"
+	"encoding/json"
 	"fmt"
+	"net/http"
 	"os"
 	"os/signal"
 	"syscall"
@@ -158,7 +161,45 @@ func main() {
 
 func reportUsage(ds *appsv1.DaemonSet) {
 	replicas := ds.Status.DesiredNumberScheduled
-	fmt.Println("Odiglet DaemonSet replicas: ", replicas)
+	fmt.Printf("Reporting usage: installed_nodes=%d\n", replicas)
+
+	// Get agent port from environment or use default
+	agentPort := os.Getenv("AGENT_LOCAL_PORT")
+	if agentPort == "" {
+		agentPort = "4567"
+	}
+
+	// Prepare metric report for ubbagent
+	report := map[string]interface{}{
+		"name": "installed_nodes",
+		"value": map[string]interface{}{
+			"int64Value": int64(replicas),
+		},
+		"startTime": time.Now().UTC().Format(time.RFC3339),
+		"endTime":   time.Now().UTC().Format(time.RFC3339),
+	}
+
+	reportJSON, err := json.Marshal(report)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "ERROR: failed to marshal usage report: %v\n", err)
+		return
+	}
+
+	// Send report to ubbagent
+	url := fmt.Sprintf("http://localhost:%s/report", agentPort)
+	resp, err := http.Post(url, "application/json", bytes.NewBuffer(reportJSON))
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "ERROR: failed to send usage report to agent: %v\n", err)
+		return
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		fmt.Fprintf(os.Stderr, "ERROR: agent returned status %d for usage report\n", resp.StatusCode)
+		return
+	}
+
+	fmt.Println("Usage report sent successfully to billing agent")
 }
 
 func watchOdigletDaemonSet(ctx context.Context, clientset *kubernetes.Clientset, namespace string) {

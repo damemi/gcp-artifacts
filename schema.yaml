@@ -102,7 +102,12 @@ properties:
     type: string
     x-google-marketplace:
       type: NAMESPACE
+  reportingSecret:
+    type: string
+    x-google-marketplace:
+      type: REPORTING_SECRET
 
 required:
 - name
 - namespace
+- reportingSecret

@@ -1,4 +1,43 @@
 ---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: $name-ubbagent-config
+  namespace: $namespace
+data:
+  config.yaml: |
+    identities:
+      gcp:
+        encodedServiceAccountKey: $AGENT_ENCODED_KEY
+        consumerId: $AGENT_CONSUMER_ID
+
+    endpoints:
+      - name: on_disk
+        disk:
+          reportDir: /var/lib/ubbagent/reports
+          expireSeconds: 3600
+      - name: servicecontrol
+        servicecontrol:
+          identity: gcp
+          serviceName: odigos.endpoints.odigos-public.cloud.goog
+          consumerId: $AGENT_CONSUMER_ID
+
+    metrics:
+      - name: installed_nodes
+        type: int
+        aggregation:
+          bufferSeconds: 60
+        endpoints:
+          - name: on_disk
+          - name: servicecontrol
+        passthrough: {}
+    
+    sources:
+      - name: installed_nodes_source
+        heartbeat:
+          metric: installed_nodes
+          intervalSeconds: 60
+---
 apiVersion: apps/v1
 kind: Deployment
 metadata:
@@ -45,6 +84,8 @@ spec:
               value: "$name"
             - name: ODIGOS_INSTALLER_NAMESPACE
               value: "$namespace"
+            - name: AGENT_LOCAL_PORT
+              value: "4567"
           resources:
             requests:
               cpu: 100m
@@ -52,4 +93,39 @@ spec:
             limits:
               cpu: 500m
               memory: 512Mi
+        - name: ubbagent
+          image: gcr.io/cloud-marketplace-tools/metering/ubbagent:latest
+          env:
+            - name: AGENT_CONFIG_FILE
+              value: /etc/ubbagent/config.yaml
+            - name: AGENT_LOCAL_PORT
+              value: "4567"
+            - name: AGENT_ENCODED_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: $reportingSecret
+                  key: reporting-key
+            - name: AGENT_CONSUMER_ID
+              valueFrom:
+                secretKeyRef:
+                  name: $reportingSecret
+                  key: consumer-id
+          volumeMounts:
+            - name: ubbagent-config
+              mountPath: /etc/ubbagent
+            - name: ubbagent-reports
+              mountPath: /var/lib/ubbagent/reports
+          resources:
+            requests:
+              cpu: 50m
+              memory: 64Mi
+            limits:
+              cpu: 100m
+              memory: 128Mi
+      volumes:
+        - name: ubbagent-config
+          configMap:
+            name: $name-ubbagent-config
+        - name: ubbagent-reports
+          emptyDir: {}
 
