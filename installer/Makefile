@@ -13,7 +13,7 @@ push-image:
 		--platform $(PLATFORMS) \
 		--tag $(IMAGE) \
 		--push \
-		--annotation "com.googleapis.cloudmarketplace.product.service.name=services/odigos.endpoints.odigos-public.cloud.goog" \
+		--annotation "index:com.googleapis.cloudmarketplace.product.service.name=services/odigos.endpoints.odigos-public.cloud.goog" \
 		.
 
 .PHONY: build-image
