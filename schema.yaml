@@ -14,9 +14,13 @@ x-google-marketplace:
       properties:
         imageFull:
           type: FULL
-    odigos-init-container:
+    odigos-agents:
       properties:
         initContainerImageFull:
+          type: FULL
+    odigos-enterprise-agents:
+      properties:
+        enterpriseInitContainerImageFull:
           type: FULL
     odigos-scheduler:
       properties:

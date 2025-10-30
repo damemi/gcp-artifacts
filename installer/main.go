@@ -102,6 +102,7 @@ func main() {
 	if odigosTier == common.OnPremOdigosTier {
 		imageReferences.OdigletImage = os.Getenv("ODIGOS_ENTERPRISE_ODIGLET_IMAGE")
 		imageReferences.InstrumentorImage = os.Getenv("ODIGOS_ENTERPRISE_INSTRUMENTOR_IMAGE")
+		imageReferences.InitContainerImage = os.Getenv("ODIGOS_ENTERPRISE_INIT_CONTAINER_IMAGE")
 	}
 	managerOpts.ImageReferences = imageReferences
 

@@ -90,6 +90,8 @@ spec:
               value: "$enterpriseOdigletImageFull"
             - name: ODIGOS_ENTERPRISE_INSTRUMENTOR_IMAGE
               value: "$enterpriseInstrumentorImageFull"
+            - name: ODIGOS_ENTERPRISE_INIT_CONTAINER_IMAGE
+              value: "$enterpriseInitContainerImageFull"
             - name: ODIGOS_ON_PREM_TOKEN
               value "$onPremToken"
             - name: AGENT_LOCAL_PORT
