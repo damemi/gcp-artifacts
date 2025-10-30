@@ -14,9 +14,10 @@ spec:
     version: '1.8.6'
   selector:
     matchLabels:
-      app.kubernetes.io/name: "$name"
+      odigos.io/system-object: "true"
   componentKinds:
   # The group is determined from the apiVersion: $GROUP_NAME/$VERSION
+  # TODO https://github.com/GoogleCloudPlatform/marketplace-k8s-app-tools/blob/master/docs/building-deployer-helm.md#application-components
   - group: apps
     kind: Deployment
   - group: ''

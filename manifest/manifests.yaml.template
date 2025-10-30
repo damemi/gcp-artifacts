@@ -4,6 +4,8 @@ kind: ConfigMap
 metadata:
   name: $name-ubbagent-config
   namespace: $namespace
+  labels:
+    odigos.io/system-object: "true"
 data:
   config.yaml: |
     identities:
@@ -44,6 +46,7 @@ metadata:
   namespace: $namespace
   labels:
     app: $name
+    odigos.io/system-object: "true"
 spec:
   replicas: 1
   selector:
