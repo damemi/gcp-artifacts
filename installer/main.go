@@ -82,7 +82,7 @@ func main() {
 	onPremToken := os.Getenv("ODIGOS_ON_PREM_TOKEN")
 	var odigosProToken string
 	odigosTier := common.CommunityOdigosTier
-	if onPremToken != "" {
+	if onPremToken != "" && onPremToken != "$onPremToken" {
 		odigosTier = common.OnPremOdigosTier
 		odigosProToken = onPremToken
 	}
