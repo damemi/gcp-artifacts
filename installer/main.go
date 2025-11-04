@@ -28,6 +28,8 @@ import (
 	"github.com/odigos-io/odigos/k8sutils/pkg/installationmethod"
 )
 
+const odigletDaemonSetName = "odiglet"
+
 func main() {
 	ctx := context.Background()
 
@@ -249,21 +251,21 @@ func watchOdigletDaemonSet(ctx context.Context, clientset *kubernetes.Clientset,
 	daemonSetInformer.AddEventHandler(cache.ResourceEventHandlerFuncs{
 		AddFunc: func(obj interface{}) {
 			ds := obj.(*appsv1.DaemonSet)
-			if ds.Name == "odigos-odiglet" {
+			if ds.Name == odigletDaemonSetName {
 				fmt.Printf("Odiglet DaemonSet added: %s/%s\n", ds.Namespace, ds.Name)
 				reportUsage(ds)
 			}
 		},
 		UpdateFunc: func(oldObj, newObj interface{}) {
 			ds := newObj.(*appsv1.DaemonSet)
-			if ds.Name == "odigos-odiglet" {
+			if ds.Name == odigletDaemonSetName {
 				fmt.Printf("Odiglet DaemonSet updated: %s/%s\n", ds.Namespace, ds.Name)
 				reportUsage(ds)
 			}
 		},
 		DeleteFunc: func(obj interface{}) {
 			ds := obj.(*appsv1.DaemonSet)
-			if ds.Name == "odigos-odiglet" {
+			if ds.Name == odigletDaemonSetName {
 				fmt.Printf("Odiglet DaemonSet deleted: %s/%s\n", ds.Namespace, ds.Name)
 				reportUsage(ds)
 			}
@@ -286,7 +288,7 @@ func watchOdigletDaemonSet(ctx context.Context, clientset *kubernetes.Clientset,
 	ticker := time.NewTicker(60 * time.Second)
 	go func() {
 		for range ticker.C {
-			ds, err := clientset.AppsV1().DaemonSets(namespace).Get(ctx, "odigos-odiglet", metav1.GetOptions{})
+			ds, err := clientset.AppsV1().DaemonSets(namespace).Get(ctx, odigletDaemonSetName, metav1.GetOptions{})
 			if err != nil {
 				fmt.Fprintf(os.Stderr, "ERROR: Failed to get odiglet DaemonSet for periodic reporting: %v\n", err)
 				continue
