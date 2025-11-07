@@ -28,16 +28,11 @@ data:
     metrics:
       - name: installed_nodes
         type: int
-        passthrough: {}
+        aggregation:
+          bufferSeconds: 60
         endpoints:
           - name: on_disk
           - name: servicecontrol
-
-    sources:
-      - name: installed_nodes_source
-        heartbeat:
-          metric: installed_nodes
-          intervalSeconds: 60
 ---
 apiVersion: apps/v1
 kind: Deployment
