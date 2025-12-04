@@ -1,6 +1,6 @@
 ORG ?= gcr.io/odigos-public
 IMAGE_NAME = odigos/deployer
-TAG ?= 1.8.6
+TAG ?= 1.11.2
 PLATFORMS = linux/amd64
 
 # Full image reference

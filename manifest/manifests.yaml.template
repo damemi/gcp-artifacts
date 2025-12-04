@@ -62,7 +62,7 @@ spec:
             - name: ODIGOS_NAMESPACE
               value: "$namespace"
             - name: ODIGOS_VERSION
-              value: "1.8.4"
+              value: "1.11.2"
             - name: ODIGOS_AUTOSCALER_IMAGE
               value: "$autoscalerImageFull"
             - name: ODIGOS_COLLECTOR_IMAGE

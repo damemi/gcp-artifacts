@@ -3,10 +3,10 @@ module github.com/odigos-io/odigos/gcp-artifacts/installer
 go 1.25.3
 
 require (
-	github.com/odigos-io/odigos/api v1.8.6
+	github.com/odigos-io/odigos/api v1.11.2
 	github.com/odigos-io/odigos/cli v0.0.0-20251028145642-014fb1e5f4dc
-	github.com/odigos-io/odigos/common v1.8.6
-	github.com/odigos-io/odigos/k8sutils v1.8.6
+	github.com/odigos-io/odigos/common v1.11.2
+	github.com/odigos-io/odigos/k8sutils v1.11.2
 	k8s.io/api v0.34.1
 	k8s.io/apiextensions-apiserver v0.34.1
 	k8s.io/apimachinery v0.34.1
