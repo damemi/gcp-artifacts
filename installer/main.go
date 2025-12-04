@@ -23,6 +23,8 @@ import (
 	"github.com/odigos-io/odigos/api/generated/odigos/clientset/versioned/typed/odigos/v1alpha1"
 	"github.com/odigos-io/odigos/cli/cmd/resources"
 	"github.com/odigos-io/odigos/cli/cmd/resources/resourcemanager"
+	"github.com/odigos-io/odigos/cli/pkg/autodetect"
+	cmdcontext "github.com/odigos-io/odigos/cli/pkg/cmd_context"
 	"github.com/odigos-io/odigos/cli/pkg/kube"
 	"github.com/odigos-io/odigos/common"
 	"github.com/odigos-io/odigos/k8sutils/pkg/installationmethod"
@@ -79,6 +81,9 @@ func main() {
 		OdigosClient:  odigosClient,
 		Config:        k8sConfig,
 	}
+
+	details := autodetect.GetK8SClusterDetails(ctx, "", "", kubeClient)
+	ctx = cmdcontext.ContextWithClusterDetails(ctx, details)
 
 	ns := os.Getenv("ODIGOS_NAMESPACE")
 	onPremToken := os.Getenv("ODIGOS_ON_PREM_TOKEN")
