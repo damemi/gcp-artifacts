@@ -4,7 +4,7 @@ go 1.25.3
 
 require (
 	github.com/odigos-io/odigos/api v1.11.2
-	github.com/odigos-io/odigos/cli v0.0.0-20251028145642-014fb1e5f4dc
+	github.com/odigos-io/odigos/cli v0.0.0-20251127100626-0de62857a58e
 	github.com/odigos-io/odigos/common v1.11.2
 	github.com/odigos-io/odigos/k8sutils v1.11.2
 	k8s.io/api v0.34.1
@@ -46,11 +46,11 @@ require (
 	go.opentelemetry.io/otel/trace v1.38.0 // indirect
 	go.yaml.in/yaml/v2 v2.4.3 // indirect
 	go.yaml.in/yaml/v3 v3.0.4 // indirect
-	golang.org/x/net v0.44.0 // indirect
+	golang.org/x/net v0.47.0 // indirect
 	golang.org/x/oauth2 v0.31.0 // indirect
-	golang.org/x/sys v0.36.0 // indirect
-	golang.org/x/term v0.35.0 // indirect
-	golang.org/x/text v0.29.0 // indirect
+	golang.org/x/sys v0.38.0 // indirect
+	golang.org/x/term v0.37.0 // indirect
+	golang.org/x/text v0.31.0 // indirect
 	golang.org/x/time v0.12.0 // indirect
 	google.golang.org/protobuf v1.36.10 // indirect
 	gopkg.in/evanphx/json-patch.v4 v4.12.0 // indirect
