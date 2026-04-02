@@ -5,7 +5,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends curl ca-certifi
     && rm -rf /var/lib/apt/lists/*
 
 # Must match a chart version published at https://odigos-io.github.io/odigos/
-ARG CHART_VERSION=1.22.3
+ARG CHART_VERSION=1.23.0
 WORKDIR /out
 RUN helm repo add odigos https://odigos-io.github.io/odigos/ \
     && helm repo update odigos \
