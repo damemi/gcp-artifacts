@@ -111,8 +111,9 @@ properties:
             - apiGroups: ['']
               resources: ['nodes/stats']
               verbs: ['get', 'list', 'watch']
+            # pods/log + pods/proxy: required so Helm can bind odigos-ui Role (UI debug dump / pprof)
             - apiGroups: ['']
-              resources: ['pods/log']
+              resources: ['pods/log', 'pods/proxy']
               verbs: ['get']
             # Apps resources
             - apiGroups: ['apps']
