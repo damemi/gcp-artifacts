@@ -27,6 +27,21 @@ import (
 
 const odigletDaemonSetName = "odiglet"
 
+// shutdownFinalizerTimeout bounds SIGTERM cleanup: Application from Deployment→Application owner ref only, helm uninstall, patch.
+// Keep below the pod terminationGracePeriodSeconds (manifests.yaml.template).
+func shutdownFinalizerTimeout() time.Duration {
+	const defaultTimeout = 270 * time.Second
+	s := os.Getenv("ODIGOS_INSTALLER_SHUTDOWN_DRAIN")
+	if s == "" {
+		return defaultTimeout
+	}
+	d, err := time.ParseDuration(s)
+	if err != nil || d <= 0 {
+		return defaultTimeout
+	}
+	return d
+}
+
 func main() {
 	ctx := context.Background()
 
@@ -80,6 +95,8 @@ func main() {
 	odigosInstallerName := os.Getenv("ODIGOS_INSTALLER_NAME")
 	odigosInstallerNamespace := os.Getenv("ODIGOS_INSTALLER_NAMESPACE")
 
+	fmt.Printf("Installer env: ODIGOS_NAMESPACE=%q ODIGOS_INSTALLER_NAME=%q ODIGOS_INSTALLER_NAMESPACE=%q\n", ns, odigosInstallerName, odigosInstallerNamespace)
+
 	fmt.Println("Getting installer deployment (for owner refs on Helm-managed workloads, if configured)")
 	if odigosInstallerName != "" && odigosInstallerNamespace != "" {
 		if _, err := getDeploymentWithRetry(ctx, clientset, odigosInstallerName, odigosInstallerNamespace); err != nil {
@@ -96,18 +113,56 @@ func main() {
 		os.Exit(1)
 	}
 
+	if odigosInstallerName != "" && odigosInstallerNamespace != "" {
+		fmt.Println("Adding Application uninstall finalizer (Application from installer Deployment ownerReference only)")
+		if err := ensureApplicationFinalizerFromInstallerDeployment(ctx, k8sConfig, clientset, odigosInstallerNamespace, odigosInstallerName); err != nil {
+			fmt.Fprintf(os.Stderr, "ERROR: could not add Application uninstall finalizer: %v\n", err)
+			os.Exit(1)
+		}
+	}
+
 	fmt.Println("Odigos installation completed successfully")
 
+	watchCtx, watchCancel := context.WithCancel(context.Background())
+
+	if odigosInstallerName != "" && odigosInstallerNamespace != "" && ns != "" {
+		fmt.Printf("Watching Application %s/%s for deletion; SIGTERM resolves Application via GCP Application ownerReference on installer Deployment\n", odigosInstallerNamespace, odigosInstallerName)
+		go watchApplicationForHelmUninstall(watchCtx, k8sConfig, odigosInstallerName, odigosInstallerNamespace, ns)
+	}
+
+	daemonCtx, daemonCancel := context.WithCancel(context.Background())
 	if ns != "" {
 		fmt.Println("Starting odiglet daemonset watcher")
-		watchOdigletDaemonSet(ctx, clientset, ns)
+		watchOdigletDaemonSet(daemonCtx, clientset, ns)
 	}
 
 	fmt.Println("Installer running, waiting for shutdown signal...")
 	sigCh := make(chan os.Signal, 1)
 	signal.Notify(sigCh, syscall.SIGINT, syscall.SIGTERM)
 	<-sigCh
-	fmt.Println("Shutdown signal received, exiting...")
+
+	fmt.Println("SIGTERM: received; stopping odiglet side watcher...")
+	daemonCancel()
+
+	if odigosInstallerNamespace != "" && odigosInstallerName != "" && ns != "" {
+		shutdownTimeout := shutdownFinalizerTimeout()
+		shutdownCtx, shutdownCancel := context.WithTimeout(context.Background(), shutdownTimeout)
+		fmt.Printf("SIGTERM: running Application finalizer drain (finalizer=%q installerDeploy=%s/%s helmNs=%q timeout=%v)\n",
+			applicationFinalizer, odigosInstallerNamespace, odigosInstallerName, ns, shutdownTimeout)
+		if err := processApplicationsWithOdigosFinalizerOnShutdown(shutdownCtx, k8sConfig, clientset, odigosInstallerNamespace, odigosInstallerName, ns); err != nil {
+			fmt.Fprintf(os.Stderr, "SIGTERM: Application cleanup returned error: %v\n", err)
+		} else {
+			fmt.Println("SIGTERM: Application cleanup handler returned without error (see Shutdown:* lines above for actual work: helm uninstall / finalizer patch may have been skipped)")
+		}
+		shutdownCancel()
+	} else {
+		fmt.Printf("SIGTERM: Application finalizer drain SKIPPED — need all of ODIGOS_INSTALLER_NAMESPACE (%q), ODIGOS_INSTALLER_NAME (%q), ODIGOS_NAMESPACE (%q) non-empty\n",
+			odigosInstallerNamespace, odigosInstallerName, ns)
+	}
+
+	fmt.Println("SIGTERM: cancelling Application informer goroutine...")
+	watchCancel()
+	fmt.Println("Exiting")
 }
 
 func getDeploymentWithRetry(ctx context.Context, clientset *kubernetes.Clientset, name, namespace string) (*appsv1.Deployment, error) {
@@ -211,24 +266,34 @@ func watchOdigletDaemonSet(ctx context.Context, clientset *kubernetes.Clientset,
 
 	stopCh := make(chan struct{})
 	go factory.Start(stopCh)
+	go func() {
+		<-ctx.Done()
+		close(stopCh)
+	}()
 
-	if !cache.WaitForCacheSync(stopCh, daemonSetInformer.HasSynced) {
+	if !cache.WaitForCacheSync(ctx.Done(), daemonSetInformer.HasSynced) {
 		fmt.Fprintf(os.Stderr, "ERROR: Failed to sync cache for DaemonSet informer\n")
 		return
 	}
 
 	fmt.Println("Odiglet DaemonSet watcher started successfully")
 
-	ticker := time.NewTicker(60 * time.Second)
 	go func() {
-		for range ticker.C {
-			ds, err := clientset.AppsV1().DaemonSets(namespace).Get(ctx, odigletDaemonSetName, metav1.GetOptions{})
-			if err != nil {
-				fmt.Fprintf(os.Stderr, "ERROR: Failed to get odiglet DaemonSet for periodic reporting: %v\n", err)
-				continue
+		ticker := time.NewTicker(60 * time.Second)
+		defer ticker.Stop()
+		for {
+			select {
+			case <-ctx.Done():
+				return
+			case <-ticker.C:
+				ds, err := clientset.AppsV1().DaemonSets(namespace).Get(ctx, odigletDaemonSetName, metav1.GetOptions{})
+				if err != nil {
+					fmt.Fprintf(os.Stderr, "ERROR: Failed to get odiglet DaemonSet for periodic reporting: %v\n", err)
+					continue
+				}
+				fmt.Println("Periodic usage report (60s interval)")
+				reportUsage(ds)
 			}
-			fmt.Println("Periodic usage report (60s interval)")
-			reportUsage(ds)
 		}
 	}()
 }

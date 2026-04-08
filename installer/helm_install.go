@@ -122,6 +122,20 @@ func helmInstallOdigos(config *rest.Config, namespace string, vals map[string]in
 	return nil
 }
 
+func helmUninstallOdigos(config *rest.Config, namespace string) error {
+	actionConfig := new(action.Configuration)
+	debug := func(format string, v ...interface{}) {
+		if os.Getenv("ODIGOS_INSTALLER_HELM_DEBUG") != "1" {
+			return
+		}
+		fmt.Printf(format, v...)
+	}
+	if err := actionConfig.Init(newRESTClientGetter(config, namespace), namespace, "secret", debug); err != nil {
+		return err
+	}
+	return runHelmUninstall(actionConfig, helmReleaseName)
+}
+
 func buildHelmValues(details *autodetect.ClusterDetails, onPremToken, imageTag string, odigosTier common.OdigosTier) map[string]interface{} {
 	vals := make(map[string]interface{})
 
@@ -131,6 +145,10 @@ func buildHelmValues(details *autodetect.ClusterDetails, onPremToken, imageTag s
 
 	openshiftEnabled := details != nil && details.Kind == autodetect.KindOpenShift
 	vals["openshift"] = map[string]interface{}{"enabled": openshiftEnabled}
+
+	// GKE: avoid system-node-critical/system-cluster-critical PriorityClass on DaemonSets (default quota often blocks it).
+	gkeEnabled := details != nil && details.Kind == autodetect.KindGKE
+	vals["gke"] = map[string]interface{}{"enabled": gkeEnabled}
 
 	if img := marketplaceImageOverrides(odigosTier == common.CommunityOdigosTier); len(img) > 0 {
 		vals["images"] = img
@@ -165,14 +183,13 @@ func marketplaceImageOverrides(community bool) map[string]interface{} {
 		}
 	} else {
 		add("enterprise-instrumentor", os.Getenv("ODIGOS_ENTERPRISE_INSTRUMENTOR_IMAGE"))
-		entOdiglet := os.Getenv("ODIGOS_ENTERPRISE_ODIGLET_IMAGE")
-		entInit := os.Getenv("ODIGOS_ENTERPRISE_INIT_CONTAINER_IMAGE")
-		switch {
-		case entInit != "":
-			add("enterprise-odiglet", entInit)
-			add("enterprise-agents", entInit)
-		case entOdiglet != "":
-			add("enterprise-odiglet", entOdiglet)
+		// enterprise-agents = instrumentation bundle (init/agent image). enterprise-odiglet = odiglet binary
+		// (/root/odiglet). Do not map init/agents image onto enterprise-odiglet or the daemonset init container breaks.
+		if v := os.Getenv("ODIGOS_ENTERPRISE_INIT_CONTAINER_IMAGE"); v != "" {
+			add("enterprise-agents", v)
+		}
+		if v := os.Getenv("ODIGOS_ENTERPRISE_ODIGLET_IMAGE"); v != "" {
+			add("enterprise-odiglet", v)
 		}
 	}
 

@@ -52,6 +52,9 @@ spec:
       labels:
         app: $name
     spec:
+      # Allow the installer time after SIGTERM to finish helm uninstall and remove the Application finalizer
+      # before the kubelet sends SIGKILL (default 30s is too short for namespace/Application teardown).
+      terminationGracePeriodSeconds: 300
       serviceAccountName: $installerServiceAccount
       containers:
         - name: installer
@@ -62,7 +65,7 @@ spec:
             - name: ODIGOS_NAMESPACE
               value: "$namespace"
             - name: ODIGOS_VERSION
-              value: "1.22.3"
+              value: "1.23.0"
             - name: ODIGOS_AUTOSCALER_IMAGE
               value: "$autoscalerImageFull"
             - name: ODIGOS_COLLECTOR_IMAGE
