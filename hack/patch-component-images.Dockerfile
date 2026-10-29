@@ -1,6 +1,7 @@
 # Patches an official Odigos component image for the Marketplace vulnerability scan without rebuilding it
-# from source. Driven by hack/patch-component-images.sh; the result is flattened afterwards so the
-# replaced files do not survive in a lower layer.
+# from source. Driven by hack/patch-component-images.sh, which appends a final stage that copies the
+# `patched` filesystem into a single layer (so the replaced files do not survive in a lower layer) and
+# restores the original image config.
 ARG BASE
 ARG PATCH_GRPC=no
 ARG PATCH_JAVA=no
@@ -27,6 +28,4 @@ FROM grpc-${PATCH_GRPC} AS java-yes
 COPY dtrace-injector.jar /instrumentations/java-ebpf/dtrace-injector.jar
 FROM grpc-${PATCH_GRPC} AS java-no
 
-FROM java-${PATCH_JAVA}
-ARG RUNTIME_USER
-USER ${RUNTIME_USER}
+FROM java-${PATCH_JAVA} AS patched

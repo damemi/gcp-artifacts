@@ -14,7 +14,6 @@ VERSION="${VERSION#v}"
 TRACK="${VERSION%.*}"
 SRC="${SRC:-registry.odigos.io}"
 DEST="${DEST:-gcr.io/odigos-public/odigos}"
-STAGING="${STAGING:-gcr.io/odigos-public/odigos-staging}"
 SERVICE_NAME="services/odigos.endpoints.odigos-public.cloud.goog"
 HERE="$(cd "$(dirname "$0")" && pwd)"
 
@@ -34,24 +33,23 @@ for p in "${PATCHES[@]}"; do
   read -r c grpc java <<<"$p"
   src="${SRC}/odigos-${c}:v${VERSION}"
   base="${src}@$(crane digest "$src")"
-  user="$(crane config --platform linux/amd64 "$src" | python3 -c 'import json,sys;print(json.load(sys.stdin)["config"].get("User") or "0")')"
-  stage="${STAGING}/odigos-${c}:v${VERSION}"
-  echo "==> ${c}: ${base} (grpc=${grpc} java=${java} user=${user})"
+  echo "==> ${c}: ${base} (grpc=${grpc} java=${java})"
+  {
+    cat "$HERE/patch-component-images.Dockerfile"
+    crane config --platform linux/amd64 "$src" | python3 "$HERE/image-config-stage.py"
+  } > "$ctx/Dockerfile"
   docker buildx build \
     --platform linux/amd64,linux/arm64 \
     --provenance=false --sbom=false \
     --build-arg BASE="$base" \
     --build-arg PATCH_GRPC="$grpc" \
     --build-arg PATCH_JAVA="$java" \
-    --build-arg RUNTIME_USER="$user" \
-    -f "$HERE/patch-component-images.Dockerfile" \
-    -t "${stage}-overlay" --push \
-    "$ctx"
-  crane flatten "${stage}-overlay" -t "${stage}-flat"
-  docker buildx imagetools create \
     --annotation "index:com.googleapis.cloudmarketplace.product.service.name=${SERVICE_NAME}" \
     --tag "${DEST}/odigos-${c}:v${VERSION}" \
     --tag "${DEST}/odigos-${c}:${VERSION}" \
     --tag "${DEST}/odigos-${c}:${TRACK}" \
-    "${stage}-flat"
+    --output type=image,push=true,oci-mediatypes=true \
+    "$ctx"
+  crane manifest "${DEST}/odigos-${c}:${VERSION}" | grep -q 'cloudmarketplace.product.service.name' \
+    || { echo "ERROR: ${DEST}/odigos-${c}:${VERSION} is missing the Marketplace annotation" >&2; exit 1; }
 done

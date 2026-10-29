@@ -135,11 +135,16 @@ that, patch only the flagged components:
   `make push-<component> ORG=gcr.io/odigos-public/odigos-staging TAG=v$VERSION PUSH_IMAGE=true GCP_MARKETPLACE=true`),
   check the binary with `go version`, then re-index it into the final tags as in step 3.
 - **Bundled agent files** (PHP vendor packages, the java-ebpf jar, `grpc_health_probe`):
-  `hack/patch-component-images.sh` overlays replacements onto the official images, flattens them to a
-  single layer (so the replaced files are gone from every layer, not just hidden) and publishes them.
+  `hack/patch-component-images.sh` overlays replacements onto the official images, copies the result
+  into a single layer (so the replaced files are gone from every layer, not just hidden), restores the
+  original image config (`hack/image-config-stage.py`) and publishes it as an annotated OCI index.
   Edit `hack/patch-component-images.Dockerfile` for what needs replacing. Run it with
-  `DEST=gcr.io/odigos-public/odigos-staging/final` first, check the result, then promote with
-  `crane copy` to `gcr.io/odigos-public/odigos/...` (all three tags).
+  `BUILDX_BUILDER=multibuilder DEST=gcr.io/odigos-public/odigos-staging/final` first, check the result
+  (Go versions, package versions, unchanged files elsewhere), then promote each of the three tags with
+  `crane copy <staging> gcr.io/odigos-public/odigos/odigos-<c>:<tag>`.
+  Don't use `crane flatten` here: on these images it writes an OCI index pointing at Docker v2
+  manifests, which gcr.io rejects (400). And don't push Docker v2 manifest lists: they can't carry the
+  annotation, and `imagetools create` drops it without an error.
 
 1.39.0 findings, for reference: Go stdlib CVE-2026-56857 (needs Go ≥ 1.26.9) in installer, collector
 and odiglet's `grpc_health_probe`; `laravel/framework` CVE-2026-114509 in the PHP agent bundle
