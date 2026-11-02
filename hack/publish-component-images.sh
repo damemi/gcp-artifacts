@@ -19,6 +19,7 @@ SERVICE_NAME="services/odigos.endpoints.odigos-public.cloud.goog"
 COMPONENTS=(
   autoscaler collector instrumentor odiglet ui agents scheduler
   enterprise-agents enterprise-odiglet enterprise-instrumentor
+  cli enterprise-collector enterprise-ui
 )
 
 for c in "${COMPONENTS[@]}"; do
