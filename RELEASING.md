@@ -71,20 +71,23 @@ helm template x odigos/odigos --version $VERSION -n ns --set image.tag=v$VERSION
   --set images.autoscaler=MP/autoscaler --set images.scheduler=MP/scheduler \
   --set images.collector=MP/collector --set images.ui=MP/ui \
   --set images.instrumentor=MP/instrumentor --set images.odiglet=MP/odiglet \
-  --set images.agents=MP/agents | grep -E '^\s+(image|value): ' | sort | uniq -c
+  --set images.agents=MP/agents --set images.cli=MP/cli \
+  | grep -E '^\s+(image|value): ' | sort | uniq -c
 ```
 
 Every Odigos image should resolve to an `MP/...` ref. Repeat with `--set onPremToken=x` and the
-`enterprise-*` keys. If the chart adds, renames or removes a component (the values file already
-says autoscaler/scheduler are merged into instrumentor; they are still deployed as of 1.39.0),
+`enterprise-*` keys (`enterprise-instrumentor`, `enterprise-odiglet`, `enterprise-agents`,
+`enterprise-collector`, `enterprise-ui`, plus `cli`). Optional components that `schema.yaml` gives
+users no way to enable (`enterprise-insights`, `cache`, `victoria-metrics`,
+`enterprise-central-proxy`, ClickHouse) stay unmapped.
+
+If the chart adds, renames or removes a component (the values file already says
+autoscaler/scheduler are merged into instrumentor; they are still deployed as of 1.39.0),
 update all of these together:
 - `schema.yaml` `x-google-marketplace.images`
 - the env vars in `manifest/manifests.yaml.template`
 - `marketplaceImageOverrides` in `installer/helm_install.go`
 - `COMPONENTS` in `hack/publish-component-images.sh`
-
-Known gap: `odigos-cli` (cleanup hook) and, for enterprise installs, `enterprise-collector` /
-`enterprise-ui` are not overridden and pull from Odigos registries directly.
 
 ### 2. Bump the version strings
 
