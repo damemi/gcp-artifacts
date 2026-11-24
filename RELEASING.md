@@ -138,10 +138,28 @@ that, patch only the flagged components:
 
 - **Installer** (`odigos` main image): bump the `golang:` images in `installer/Dockerfile` (and
   `go` in `installer/go.mod`), then rerun step 4's installer push.
-- **Go stdlib in a component** (e.g. the collector): rebuild that component from the Odigos release tag
-  with the newer Go builder image (`git worktree add ... v$VERSION`, edit the component Dockerfile,
-  `make push-<component> ORG=gcr.io/odigos-public/odigos-staging TAG=v$VERSION PUSH_IMAGE=true GCP_MARKETPLACE=true`),
-  check the binary with `go version`, then re-index it into the final tags as in step 3.
+- **Deployer**: Google's `deployer_envsubst/onbuild` base ships kubectl, and its Go version can lag the
+  scan. The root `Dockerfile` rebuilds the same kubectl version from source with a newer `golang:` image
+  and drops it over the original; bump `golang:` / `KUBECTL_VERSION` there (check `go version` on
+  `/opt/kubectl/*/kubectl` in the base first), then rerun step 4's deployer push.
+- **Go stdlib in a component** (Odigos binaries built with an older Go):
+  `hack/rebuild-component-binaries.sh <odigos checkout at v$VERSION> <component>...` rebuilds only the
+  component's Go binaries with its own Dockerfile and `GO_VERSION` as the builder, swaps them into the
+  official image, flattens it into one layer with the original config, and publishes an annotated OCI
+  index (all three tags) to `DEST`. Components: `enterprise-odiglet`, `enterprise-instrumentor`,
+  `enterprise-collector`, `enterprise-ui`, `cli`. The script header lists the environment it needs:
+  - `enterprise-odiglet` builds on an odiglet base image with the new Go: build `odiglet/base.Dockerfile`
+    from the checkout with its `golang:` bumped (`--platform linux/amd64,linux/arm64`, push to
+    `odigos-staging/odiglet-base:<tag>`) and pass it as `ODIGLET_BASE_IMAGE`. It also needs a
+    `GITHUB_TOKEN` that can read the private instrumentation modules (`gh auth token`), and takes
+    `GRPC_HEALTH_PROBE_VERSION` to fix `grpc_health_probe` in the same build.
+  - `enterprise-ui` needs `NPMRC` with a GitHub Packages token (`read:packages`) for the UI kit.
+  - `cli` needs `CLI_DATE`, the official binary's build date (`strings` on `/ko-app/cli` of the official
+    image, look for the release timestamp).
+
+  Run it with `BUILDX_BUILDER=multibuilder DEST=gcr.io/odigos-public/odigos-staging/final`, check
+  `go version -m` on every binary of the result (and `getcap`-style file capabilities on odiglet and the
+  collector), then promote as below.
 - **Bundled agent files** (PHP vendor packages, the java-ebpf jar, `grpc_health_probe`):
   `hack/patch-component-images.sh` overlays replacements onto the official images, copies the result
   into a single layer (so the replaced files are gone from every layer, not just hidden), restores the
@@ -158,6 +176,11 @@ that, patch only the flagged components:
 and odiglet's `grpc_health_probe`; `laravel/framework` CVE-2026-114509 in the PHP agent bundle
 (fixed by php-community v0.10.0); CVE-2015-1427 reported for `org.elasticsearch:elasticsearch`, a false
 positive caused by a bundled instrumentation module whose Maven artifactId was `elasticsearch`.
+
+1.40.0 findings, for reference: Go stdlib CVE-2026-97040 (needs Go 1.26.11 / 1.27.4) in the installer,
+the deployer's kubectl and every Odigos binary (odiglet, deviceplugin, CSI driver, instrumentor,
+collector, supervisor, UI, CLI), plus `grpc_health_probe` v0.4.59 (fixed by v0.4.63); `golang.org/x/crypto`
+CVEs in the installer (fixed by v0.52.0).
 
 ### 4. Build and push the installer (main image) and the deployer
 

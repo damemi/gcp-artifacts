@@ -1,4 +1,4 @@
-FROM golang:1.26.9 AS chart
+FROM golang:1.26.11 AS chart
 
 RUN apt-get update && apt-get install -y --no-install-recommends curl ca-certificates \
     && curl -fsSL https://raw.githubusercontent.com/helm/helm/main/scripts/get-helm-3 | bash \
@@ -12,7 +12,7 @@ RUN helm pull oci://registry.odigos.io/charts/odigos --version "${CHART_VERSION}
     && f="$(ls /out/*.tgz | head -1)" \
     && mv "$f" /out/odigos-chart.tgz
 
-FROM --platform=$BUILDPLATFORM golang:1.26.9 AS builder
+FROM --platform=$BUILDPLATFORM golang:1.26.11 AS builder
 
 ARG TARGETPLATFORM
 ARG BUILDPLATFORM
