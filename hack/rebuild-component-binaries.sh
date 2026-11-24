@@ -124,16 +124,11 @@ for c in "$@"; do
             --secret id=npmrc,src="$NPMRC" "$CHECKOUT"
       ;;
     cli)
-      # The release builds the CLI with ko (cli/.ko.yaml) and embeds the packaged Helm charts. Rebuild it the
-      # same way: same flags and version stamps (read the date from the official binary with `strings`), but
-      # with GO_VERSION.
+      # The release builds the CLI image with ko (cli/.ko.yaml). Rebuild it the same way: same flags and version
+      # stamps (read the date from the official binary with `strings`), but with GO_VERSION. The official image's
+      # binary embeds no Helm chart (only cli/pkg/helm/embedded/.keep), so neither does this one; check
+      # `strings <binary> | grep embedded/` on the official image if that changes.
       : "${CLI_DATE:?CLI_DATE is required for cli (OdigosDate of the official binary)}"
-      rm -rf "$ctx/cli" && mkdir -p "$ctx/cli"
-      git -C "$CHECKOUT" archive "v${VERSION}" helm scripts | tar -x -C "$ctx/cli"
-      (cd "$ctx/cli" && git init -q && git add -A && git -c user.name=x -c user.email=x@x commit -qm x \
-        && TAG="v${VERSION}" bash scripts/package-charts.sh >/dev/null)
-      emb="$CHECKOUT/cli/pkg/helm/embedded"
-      cp "$ctx"/cli/helm/odigos-*.tgz "$emb/"
       for arch in amd64 arm64; do
         (cd "$CHECKOUT/cli" && GOTOOLCHAIN="go${GO_VERSION}" GOWORK=off CGO_ENABLED=0 GOOS=linux GOARCH=$arch \
           go build -trimpath -tags=embed_manifests -o "$ctx/cli-bin/cli-$arch" -ldflags "
@@ -142,8 +137,7 @@ for c in "$@"; do
             -X github.com/odigos-io/odigos/cli/cmd.OdigosCommit=${CLI_COMMIT:-}
             -X github.com/odigos-io/odigos/cli/cmd.OdigosDate=${CLI_DATE}" .)
       done
-      rm -f "$emb"/odigos-*.tgz
-      printf 'ARG MP_BASE\nFROM ${MP_BASE} AS patched\nARG TARGETARCH\nCOPY cli-${TARGETARCH} /ko-app/cli\n' \
+      printf 'ARG MP_BASE\nFROM ${MP_BASE} AS patched\nARG TARGETARCH\nCOPY --chmod=555 cli-${TARGETARCH} /ko-app/cli\n' \
         | publish "$c" "$ctx/cli-bin"
       ;;
     *)
