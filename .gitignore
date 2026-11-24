@@ -6,3 +6,4 @@ go.work.sum
 /installer/helm-chart-odigos-*.tgz
 # Verification-only schema overlay with a real token (`make data-test`); never commit
 /data-test/
+/installer/installer
