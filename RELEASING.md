@@ -26,8 +26,8 @@ up to report node counts and to run `helm uninstall` when the Application is del
 
 Marketplace rules that bite:
 - **Every** image (deployer, main image, every component in `schema.yaml`) needs both the
-  full version tag (`1.39.0`) and the minor-version track tag (`1.39`). Component images also
-  get `v1.39.0`.
+  full version tag (`1.40.0`) and the minor-version track tag (`1.40`). Component images also
+  get `v1.40.0`.
 - Every image must carry the annotation
   `com.googleapis.cloudmarketplace.product.service.name=services/odigos.endpoints.odigos-public.cloud.goog`
   (on the index for multi-arch images, on the manifest for the deployer).
@@ -39,6 +39,9 @@ Marketplace rules that bite:
 - `schema.yaml` `publishedVersion` must equal the deployer tag, and the Application
   `spec.descriptor.version` must match it.
 - Marketplace clusters are x86, so amd64 is required for everything. The deployer is amd64-only.
+- Since 1.40 `onPremToken` is a required `MASKED_FIELD` in `schema.yaml`. The chart has no
+  community tier: odiglet, instrumentor and UI read the `odigos-pro` secret, which the chart only
+  creates from the token, and the installer exits with an error when the token is empty.
 
 ## Prerequisites (local Mac)
 
@@ -51,38 +54,40 @@ Marketplace rules that bite:
 
 ## Steps
 
-Set `VERSION=1.39.0` (no `v`) and `TRACK=1.39` below.
+Set `VERSION=1.40.0` (no `v`) and `TRACK=1.40` below.
 
 ### 1. Pick the version and check the chart
 
 ```bash
 gh release list -R odigos-io/odigos -L 5          # latest stable release
-helm repo update odigos && helm search repo odigos/odigos --versions | head
+helm show chart oci://registry.odigos.io/charts/odigos --version $VERSION
 ```
 
-The chart version must exist (`odigos/odigos` `$VERSION`).
+The chart version must exist in `oci://registry.odigos.io/charts/odigos`. (The old
+`https://odigos-io.github.io/odigos/` repo index stops at 1.39.0; don't use it.)
 
 Check that the chart still uses the same image components the installer overrides. Diff
 `helm show values` between the old and new versions, then render with the marketplace overrides
 and compare the image list:
 
 ```bash
-helm template x odigos/odigos --version $VERSION -n ns --set image.tag=v$VERSION \
-  --set images.autoscaler=MP/autoscaler --set images.scheduler=MP/scheduler \
-  --set images.collector=MP/collector --set images.ui=MP/ui \
-  --set images.instrumentor=MP/instrumentor --set images.odiglet=MP/odiglet \
-  --set images.agents=MP/agents --set images.cli=MP/cli \
+helm template x oci://registry.odigos.io/charts/odigos --version $VERSION -n ns --set image.tag=v$VERSION \
+  --set onPremToken=x \
+  --set images.autoscaler=MP/autoscaler --set images.scheduler=MP/scheduler --set images.cli=MP/cli \
+  --set images.enterprise-instrumentor=MP/enterprise-instrumentor \
+  --set images.enterprise-odiglet=MP/enterprise-odiglet --set images.enterprise-agents=MP/enterprise-agents \
+  --set images.enterprise-collector=MP/enterprise-collector --set images.enterprise-ui=MP/enterprise-ui \
   | grep -E '^\s+(image|value): ' | sort | uniq -c
 ```
 
-Every Odigos image should resolve to an `MP/...` ref. Repeat with `--set onPremToken=x` and the
-`enterprise-*` keys (`enterprise-instrumentor`, `enterprise-odiglet`, `enterprise-agents`,
-`enterprise-collector`, `enterprise-ui`, plus `cli`). Optional components that `schema.yaml` gives
-users no way to enable (`enterprise-insights`, `cache`, `victoria-metrics`,
-`enterprise-central-proxy`, ClickHouse) stay unmapped.
+Every Odigos image should resolve to an `MP/...` ref. Since 1.40.0 the chart has no community tier:
+it always deploys the `enterprise-*` images, and the community images (`odigos-collector`,
+`odigos-instrumentor`, `odigos-odiglet`, `odigos-ui`, `odigos-agents`) are no longer published.
+Optional components that `schema.yaml` gives users no way to enable (`enterprise-insights`, `cache`,
+`victoria-metrics`, `enterprise-central-proxy`, ClickHouse) stay unmapped.
 
 If the chart adds, renames or removes a component (the values file already says
-autoscaler/scheduler are merged into instrumentor; they are still deployed as of 1.39.0),
+autoscaler/scheduler are merged into instrumentor; they are still deployed as of 1.40.0),
 update all of these together:
 - `schema.yaml` `x-google-marketplace.images`
 - the env vars in `manifest/manifests.yaml.template`
@@ -156,10 +161,25 @@ positive caused by a bundled instrumentation module whose Maven artifactId was `
 
 ### 4. Build and push the installer (main image) and the deployer
 
+The deployer needs a **verification token**. Google verifies with schema defaults only, and
+`onPremToken` is required with no default, so the deployer carries a test-only default in
+`/data-test/schema.yaml`. Only the deployer's test mode reads it; customer installs ignore it and must
+enter their own token. Anyone can read it from the public deployer image, so it must be a dedicated
+token that expires soon after review:
+
+1. In `odigos-io/odigos`, run the **Generate On-Prem Token** workflow with `jwt_audience`
+   `gcp-marketplace-verification-$VERSION`, `token_expiry_days` `30` (covers Save and Validate plus up
+   to two weeks of review), no profiles, and `notify` off.
+2. Download the `token.txt` artifact within a day (it is deleted after that) to a file outside the repo,
+   e.g. `~/mp-verify-token.txt`. Never commit it; `data-test/` is gitignored.
+3. Submit in Producer Portal (step 7) well before it expires. Each new deployer version needs a fresh
+   token; a re-validation after expiry fails.
+
 ```bash
 export PATH=$HOME/google-cloud-sdk/bin:$PATH
 make -C installer push-image   # gcr.io/odigos-public/odigos:$VERSION and :$TRACK (amd64+arm64)
-BUILDX_BUILDER=multibuilder make push-image   # gcr.io/odigos-public/odigos/deployer:$VERSION and :$TRACK (amd64)
+BUILDX_BUILDER=multibuilder make push-image VERIFY_TOKEN_FILE=~/mp-verify-token.txt   # gcr.io/odigos-public/odigos/deployer:$VERSION and :$TRACK (amd64)
+rm -r data-test
 ```
 
 The deployer must be pushed with a `docker-container` buildx builder (`multibuilder` here; create
@@ -191,7 +211,8 @@ kubectl apply -f https://raw.githubusercontent.com/GoogleCloudPlatform/marketpla
 # The Homebrew `mpdev` (/opt/homebrew/bin/mpdev) is Google's newer Go CLI and has no `verify`.
 # Use the k8s dev wrapper from Google's image (needs gcloud on PATH for the gcr.io pull):
 docker run --rm --platform linux/amd64 gcr.io/cloud-marketplace-tools/k8s/dev cat /scripts/dev > /tmp/mpdev && chmod +x /tmp/mpdev
-# It mounts KUBE_CONFIG (default ~/.kube/config) into the container
+# It mounts KUBE_CONFIG (default ~/.kube/config) into the container.
+# Like Google's verification, it takes onPremToken from the deployer's /data-test overlay (step 4).
 KUBE_CONFIG=/tmp/mpdev-kubeconfig /tmp/mpdev verify --deployer=gcr.io/odigos-public/odigos/deployer:$VERSION
 ```
 
@@ -212,8 +233,12 @@ kubectl create ns odigos-test
 # reportingSecret is required; a dummy one works (ubbagent will crashloop on it, which is expected)
 kubectl -n odigos-test create secret generic odigos-reporting \
   --from-literal=reporting-key=$(echo '{}' | base64) --from-literal=consumer-id=project:test
+# mpdev install is not test mode, so it ignores /data-test: pass a token like a customer would.
+# mpdev echoes the parameters, so mask the token in its output.
+TOKEN=$(tr -d '[:space:]' < ~/mp-verify-token.txt)
 KUBE_CONFIG=/tmp/mpdev-kubeconfig /tmp/mpdev install --deployer=gcr.io/odigos-public/odigos/deployer:$VERSION \
-  --parameters='{"name": "odigos", "namespace": "odigos-test", "reportingSecret": "odigos-reporting"}'
+  --parameters="{\"name\": \"odigos\", \"namespace\": \"odigos-test\", \"reportingSecret\": \"odigos-reporting\", \"onPremToken\": \"$TOKEN\"}" \
+  2>&1 | sed "s/$TOKEN/***/g"
 kubectl -n odigos-test rollout status ds/odiglet --timeout=300s
 kubectl -n odigos-test get pods -o custom-columns='NAME:.metadata.name,READY:.status.containerStatuses[*].ready,IMAGES:.spec.containers[*].image'
 kubectl -n odigos-test logs deploy/odigos -c installer
