@@ -49,8 +49,8 @@ Marketplace rules that bite:
   `docker` with buildx, `helm`, `crane`, `kubectl`, `mpdev` (`/opt/homebrew/bin/mpdev`).
 - `gcloud auth login` (the token expires; non-interactive runs fail with "Reauthentication failed").
 - `gcloud auth configure-docker` (`gcr.io` → `gcloud` credHelper in `~/.docker/config.json`).
-- The default gcloud project is `odigos-cloud`. Pass `--project odigos-public` explicitly rather
-  than changing it.
+- The default gcloud project may not be `odigos-public`. Pass `--project odigos-public` explicitly
+  rather than changing it.
 
 ## Steps
 
@@ -133,44 +133,93 @@ Older releases (≤1.35.3) rebuilt these from source with
 
 Producer Portal **Save and Validate** also runs a vulnerability scan and rejects the release if any
 image contains packages with known fixed CVEs. The report lists image digest, package, affected and
-fixed version. Fix the source in Odigos (and cut a release) when possible. To ship a release before
-that, patch only the flagged components:
+fixed version. The findings have to be fixed in the images under the tags you already pushed; then run
+**Save and Validate** again. Work through them in this order:
+
+1. **Triage.** For each finding, find the file in the image and what produced it (`crane export` the
+   image, `go version -m <binary>` for Go binaries). Sort each into one of the paths below.
+2. **Fix upstream.** Check whether Odigos `main` already has the fix (builder `golang:` images,
+   `odiglet/base.Dockerfile`, pinned tool versions such as `GRPC_HEALTH_PROBE_VERSION`). Open a PR
+   against `odigos-io/odigos` `main` for anything it doesn't, referencing the release ticket, so the next
+   release passes the scan as published.
+3. **Patch this release** with the paths below, building into
+   `gcr.io/odigos-public/odigos-staging/...` first.
+4. **Check** each patched image against the official one (see "Checking a patched image").
+5. **Re-verify** with `mpdev verify` from staging if the deployer, the installer or a component's
+   binaries changed (see "Re-verifying from staging").
+6. **Promote** to prod, check tags and annotations as in step 4, and run **Save and Validate** again.
+
+Patch paths:
 
 - **Installer** (`odigos` main image): bump the `golang:` images in `installer/Dockerfile` (and
-  `go` in `installer/go.mod`), then rerun step 4's installer push.
+  `go` in `installer/go.mod`); bump flagged modules with
+  `(cd installer && GOWORK=off go get <module>@<fixed> && GOWORK=off go mod tidy)`. Rebuild with step 4's
+  installer push (to staging first: `make -C installer push-image ORG=gcr.io/odigos-public/odigos-staging/<dir>`).
 - **Deployer**: Google's `deployer_envsubst/onbuild` base ships kubectl, and its Go version can lag the
-  scan. The root `Dockerfile` rebuilds the same kubectl version from source with a newer `golang:` image
-  and drops it over the original; bump `golang:` / `KUBECTL_VERSION` there (check `go version` on
-  `/opt/kubectl/*/kubectl` in the base first), then rerun step 4's deployer push.
+  scan even in the latest base. The root `Dockerfile` rebuilds the same kubectl version from source with a
+  newer `golang:` image and drops it over the original; bump `golang:` / `KUBECTL_VERSION` there (check
+  `go version` on `/opt/kubectl/*/kubectl` in the base first), then rerun step 4's deployer push. The
+  verification token from step 4 can be reused while it is valid.
 - **Go stdlib in a component** (Odigos binaries built with an older Go):
   `hack/rebuild-component-binaries.sh <odigos checkout at v$VERSION> <component>...` rebuilds only the
   component's Go binaries with its own Dockerfile and `GO_VERSION` as the builder, swaps them into the
   official image, flattens it into one layer with the original config, and publishes an annotated OCI
   index (all three tags) to `DEST`. Components: `enterprise-odiglet`, `enterprise-instrumentor`,
-  `enterprise-collector`, `enterprise-ui`, `cli`. The script header lists the environment it needs:
+  `enterprise-collector`, `enterprise-ui`, `cli`. Use a clean worktree of the release tag
+  (`git worktree add --detach <dir> v$VERSION`); the script bumps the Go version itself. The script
+  header lists the environment it needs:
   - `enterprise-odiglet` builds on an odiglet base image with the new Go: build `odiglet/base.Dockerfile`
     from the checkout with its `golang:` bumped (`--platform linux/amd64,linux/arm64`, push to
     `odigos-staging/odiglet-base:<tag>`) and pass it as `ODIGLET_BASE_IMAGE`. It also needs a
-    `GITHUB_TOKEN` that can read the private instrumentation modules (`gh auth token`), and takes
-    `GRPC_HEALTH_PROBE_VERSION` to fix `grpc_health_probe` in the same build.
-  - `enterprise-ui` needs `NPMRC` with a GitHub Packages token (`read:packages`) for the UI kit.
-  - `cli` needs `CLI_DATE`, the official binary's build date (`strings` on `/ko-app/cli` of the official
-    image, look for the release timestamp).
+    `GITHUB_TOKEN` that can read the private instrumentation modules (`GITHUB_TOKEN=$(gh auth token)`),
+    and takes `GRPC_HEALTH_PROBE_VERSION` to fix `grpc_health_probe` in the same build. Its deviceplugin
+    and CSI driver are cgo binaries, so the builder runs per target platform (amd64 under emulation on a
+    Mac) and the build takes much longer than the others.
+  - `enterprise-ui` needs `NPMRC`: an `.npmrc` with a GitHub Packages token for the UI kit. With the gh
+    CLI: `gh auth refresh -h github.com -s read:packages` once, then write
+    `//npm.pkg.github.com/:_authToken=<gh auth token>` to a mode-600 file outside the repo and delete
+    it after the build.
+  - `cli` needs `CLI_DATE`, the official binary's build date: `crane export` the official image and run
+    `strings ko-app/cli | grep -E '^20[0-9]{2}-[0-9]{2}-[0-9]{2}T'`. The official CLI image embeds no
+    Helm chart, and neither does the rebuild.
 
-  Run it with `BUILDX_BUILDER=multibuilder DEST=gcr.io/odigos-public/odigos-staging/final`, check
-  `go version -m` on every binary of the result (and `getcap`-style file capabilities on odiglet and the
-  collector), then promote as below.
-- **Bundled agent files** (PHP vendor packages, the java-ebpf jar, `grpc_health_probe`):
+  Run it with `BUILDX_BUILDER=multibuilder DEST=gcr.io/odigos-public/odigos-staging/final`. Run one
+  build at a time: `go mod download` inside the builds intermittently fails with
+  `stream error: ... INTERNAL_ERROR; received from peer` from proxy.golang.org, more often when several
+  builds download at once. Rerun the script on that error; BuildKit's module cache keeps what was
+  already downloaded.
+- **Bundled agent files** (PHP vendor packages, the java-ebpf jar, `grpc_health_probe` alone):
   `hack/patch-component-images.sh` overlays replacements onto the official images, copies the result
   into a single layer (so the replaced files are gone from every layer, not just hidden), restores the
   original image config (`hack/image-config-stage.py`) and publishes it as an annotated OCI index.
   Edit `hack/patch-component-images.Dockerfile` for what needs replacing. Run it with
-  `BUILDX_BUILDER=multibuilder DEST=gcr.io/odigos-public/odigos-staging/final` first, check the result
-  (Go versions, package versions, unchanged files elsewhere), then promote each of the three tags with
-  `crane copy <staging> gcr.io/odigos-public/odigos/odigos-<c>:<tag>`.
-  Don't use `crane flatten` here: on these images it writes an OCI index pointing at Docker v2
-  manifests, which gcr.io rejects (400). And don't push Docker v2 manifest lists: they can't carry the
-  annotation, and `imagetools create` drops it without an error.
+  `BUILDX_BUILDER=multibuilder DEST=gcr.io/odigos-public/odigos-staging/final` first.
+
+Don't use `crane flatten` for any of this: on these images it writes an OCI index pointing at Docker v2
+manifests, which gcr.io rejects (400). And don't push Docker v2 manifest lists: they can't carry the
+annotation, and `imagetools create` drops it without an error.
+
+**Checking a patched image.** Export the patched and the official image for each architecture
+(`crane export --platform linux/<arch> <ref> - > <file>.tar`) and check:
+- `go version -m` on every replaced binary: the new Go version, and the same build settings as the
+  official binary (`-ldflags`, `CGO_ENABLED`, `-tags`).
+- Everything else is unchanged: compare every tar entry except the replaced files (content hash, mode,
+  owner, and the `SCHILY.xattr.*` PAX headers, which hold file capabilities). odiglet and the collector
+  binary carry file capabilities, and they must match the official image.
+- The image config (`crane config`: entrypoint, user, env, working directory) matches the official one.
+- The index carries the annotation and the three tags share one digest.
+
+**Re-verifying from staging.** `mpdev verify` derives every image from the deployer's path, so put a
+complete copy of the package under one staging prefix: the installer at `<prefix>/odigos:$VERSION`,
+the deployer at `<prefix>/odigos/deployer:$VERSION`, and every component in `schema.yaml` at
+`<prefix>/odigos/odigos-<c>:$VERSION`. Copy the unchanged components from prod with `crane copy`, push
+the rebuilt installer and deployer there with `ORG=<prefix>`, then run step 5 with
+`--deployer=<prefix>/odigos/deployer:$VERSION`. The log should show every image pulled from `<prefix>`.
+
+**Promoting.** `crane copy <staging>:<tag> gcr.io/odigos-public/odigos/<repo>:<tag>` for each tag
+(`v$VERSION`, `$VERSION` and `$TRACK` for components, `$VERSION` and `$TRACK` for the installer and
+deployer). This overwrites the tags Producer Portal already points at, so the next **Save and Validate**
+scans the patched images.
 
 1.39.0 findings, for reference: Go stdlib CVE-2026-56857 (needs Go ≥ 1.26.9) in installer, collector
 and odiglet's `grpc_health_probe`; `laravel/framework` CVE-2026-114509 in the PHP agent bundle
@@ -180,7 +229,9 @@ positive caused by a bundled instrumentation module whose Maven artifactId was `
 1.40.0 findings, for reference: Go stdlib CVE-2026-97040 (needs Go 1.26.11 / 1.27.4) in the installer,
 the deployer's kubectl and every Odigos binary (odiglet, deviceplugin, CSI driver, instrumentor,
 collector, supervisor, UI, CLI), plus `grpc_health_probe` v0.4.59 (fixed by v0.4.63); `golang.org/x/crypto`
-CVEs in the installer (fixed by v0.52.0).
+CVEs in the installer (fixed by v0.52.0). Fixed with all three paths above (installer, deployer kubectl,
+component binary rebuilds). Odigos `main` was already on Go 1.27.4; only the `grpc_health_probe` bump
+went upstream.
 
 ### 4. Build and push the installer (main image) and the deployer
 
